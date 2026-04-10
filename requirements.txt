@@ -1,50 +1,50 @@
 # Core Web Framework
-streamlit==1.28.1
+streamlit==1.56.0   
 
 # Data Processing
-pandas==2.0.3
-numpy==1.24.3
+pandas==3.0.2       
+numpy==2.4.4       
 
 # Machine Learning
-scikit-learn==1.3.0
-scipy==1.11.3
+scikit-learn==1.8.0
+scipy==1.17.1       
 
 # Data Source
-yfinance==0.2.22
+yfinance==1.2.1      
 
 # Visualization
-plotly==5.17.0
-matplotlib==3.7.2
-seaborn==0.12.2
+plotly==6.6.0       
+matplotlib==3.10.8  
+seaborn==0.13.2     
 
 # Sentiment Analysis
-textblob==0.17.1
-requests==2.31.0
+textblob==0.20.0    
+requests==2.33.1    
 
 # Utilities
-joblib==1.3.2
-python-dateutil==2.8.2
+joblib==1.5.3       
+python-dateutil==2.9.0.post0 
 
 # API
-flask==2.3.0
-flask-cors==4.0.0
-flask-limiter==3.5.0
+flask==3.1.3        
+flask-cors==6.0.2   
+flask-limiter==4.1.1 
 
 # Database
-sqlalchemy==2.0.23
+sqlalchemy==2.0.49  
 
 # Scheduling
-schedule==1.2.0
+schedule==1.2.2     
 
 # Web Sockets
-websockets==11.0
+websockets==16.0    
 
 # Testing
-pytest==7.4.3
-pytest-cov==4.1.0
+pytest==9.0.3       
+pytest-cov==7.1.0    
 
 # Monitoring
-psutil==5.9.5
+psutil==7.2.2       
 
 # Environment variables
-python-dotenv==1.0.0
+python-dotenv==1.2.2 
