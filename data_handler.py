@@ -90,7 +90,7 @@ class DataHandler:
         df = df.dropna()
         
         # Forward fill any remaining NaN
-        df = df.fillna(method='ffill').fillna(method='bfill')
+        df = df.ffill().bfill()
         
         # Remove duplicates
         df = df[~df.index.duplicated(keep='first')]
