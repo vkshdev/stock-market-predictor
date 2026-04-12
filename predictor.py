@@ -79,7 +79,7 @@ class StockPredictor:
         
         # Handle missing values
         X = df[available_features].copy()
-        X = X.fillna(method='ffill').fillna(method='bfill')
+        X = X.ffill().bfill()
         
         self.feature_columns = available_features
         
