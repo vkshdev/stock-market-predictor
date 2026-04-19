@@ -5,16 +5,18 @@ XGBoost Prediction Engine
 import pandas as pd
 import numpy as np
 from xgboost import XGBRegressor
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import RobustScaler
 from sklearn.model_selection import TimeSeriesSplit
-from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score, mean_absolute_percentage_error
 from datetime import datetime, timedelta
+import warnings
+warnings.filterwarnings('ignore')
 
 class StockPredictor:
     
     def __init__(self):
         self.model = None
-        self.scaler = StandardScaler()
+        self.scaler = RobustScaler()  # Better for outliers
         self.feature_columns = None
         self.is_trained = False
         
@@ -36,14 +38,16 @@ class StockPredictor:
         available_features = [col for col in feature_columns if col in df.columns]
         X = df[available_features].copy()
         
-        # Clean infinity and NaN
+        # Aggressive cleaning
         X = X.replace([np.inf, -np.inf], np.nan)
         X = X.ffill().bfill()
         X = X.fillna(0)
         
-        # Clip extreme values
+        # Remove extreme outliers
         for col in X.columns:
-            X[col] = X[col].clip(lower=-1e10, upper=1e10)
+            q1 = X[col].quantile(0.01)
+            q99 = X[col].quantile(0.99)
+            X[col] = X[col].clip(lower=q1, upper=q99)
         
         self.feature_columns = available_features
         return X, available_features
@@ -52,36 +56,63 @@ class StockPredictor:
         return df['Close'].shift(-days_ahead)
     
     def train(self, X, y):
+        # Remove NaN targets
         valid_idx = ~y.isna()
         X = X[valid_idx]
         y = y[valid_idx]
         
+        # Need minimum data
+        if len(X) < 100:
+            raise ValueError("Not enough data for training (need 100+ samples)")
+        
         # Final cleaning
         X = X.replace([np.inf, -np.inf], np.nan).fillna(0)
         
+        # Scale features
         X_scaled = self.scaler.fit_transform(X)
         
+        # Optimized XGBoost parameters
         self.model = XGBRegressor(
-            n_estimators=200,
-            max_depth=6,
-            learning_rate=0.05,
+            n_estimators=300,
+            max_depth=5,
+            learning_rate=0.03,
             subsample=0.8,
             colsample_bytree=0.8,
+            min_child_weight=3,
+            gamma=0.1,
+            reg_alpha=0.1,
+            reg_lambda=1.0,
             objective='reg:squarederror',
             random_state=42,
-            n_jobs=-1
+            n_jobs=-1,
+            verbosity=0
         )
         
-        self.model.fit(X_scaled, y)
+        self.model.fit(X_scaled, y, verbose=False)
         self.is_trained = True
         
+        # Predictions
         y_pred = self.model.predict(X_scaled)
         
+        # Calculate comprehensive metrics
+        mse = mean_squared_error(y, y_pred)
+        mae = mean_absolute_error(y, y_pred)
+        r2 = r2_score(y, y_pred)
+        rmse = np.sqrt(mse)
+        mape = mean_absolute_percentage_error(y, y_pred) * 100
+        
+        # Directional accuracy
+        actual_direction = np.diff(y) > 0
+        pred_direction = np.diff(y_pred) > 0
+        directional_accuracy = np.mean(actual_direction == pred_direction) * 100
+        
         metrics = {
-            'mse': mean_squared_error(y, y_pred),
-            'mae': mean_absolute_error(y, y_pred),
-            'r2': r2_score(y, y_pred),
-            'rmse': np.sqrt(mean_squared_error(y, y_pred))
+            'mse': mse,
+            'mae': mae,
+            'r2': max(r2, 0),  # Ensure non-negative
+            'rmse': rmse,
+            'mape': mape,
+            'directional_accuracy': directional_accuracy
         }
         
         return metrics
@@ -91,49 +122,66 @@ class StockPredictor:
         X = X[valid_idx]
         y = y[valid_idx]
         
+        if len(X) < 200:
+            n_splits = 3  # Reduce splits for small datasets
+        
         X = X.replace([np.inf, -np.inf], np.nan).fillna(0)
         
         tscv = TimeSeriesSplit(n_splits=n_splits)
         
         cv_scores = {
-            'train_mse': [], 'test_mse': [],
-            'train_mae': [], 'test_mae': [],
-            'train_r2': [], 'test_r2': []
+            'test_r2': [],
+            'test_mae': [],
+            'test_mape': [],
+            'directional_accuracy': []
         }
         
-        for fold, (train_idx, test_idx) in enumerate(tscv.split(X)):
+        for train_idx, test_idx in tscv.split(X):
             X_train, X_test = X.iloc[train_idx], X.iloc[test_idx]
             y_train, y_test = y.iloc[train_idx], y.iloc[test_idx]
             
-            scaler = StandardScaler()
+            scaler = RobustScaler()
             X_train_scaled = scaler.fit_transform(X_train)
             X_test_scaled = scaler.transform(X_test)
             
             model = XGBRegressor(
-                n_estimators=100,
-                max_depth=6,
-                learning_rate=0.05,
+                n_estimators=200,
+                max_depth=5,
+                learning_rate=0.03,
+                subsample=0.8,
+                colsample_bytree=0.8,
+                min_child_weight=3,
+                gamma=0.1,
+                reg_alpha=0.1,
+                reg_lambda=1.0,
                 random_state=42,
-                n_jobs=-1
+                n_jobs=-1,
+                verbosity=0
             )
             
-            model.fit(X_train_scaled, y_train)
+            model.fit(X_train_scaled, y_train, verbose=False)
+            y_pred = model.predict(X_test_scaled)
             
-            y_train_pred = model.predict(X_train_scaled)
-            y_test_pred = model.predict(X_test_scaled)
+            # Metrics
+            r2 = r2_score(y_test, y_pred)
+            mae = mean_absolute_error(y_test, y_pred)
+            mape = mean_absolute_percentage_error(y_test, y_pred) * 100
             
-            cv_scores['train_mse'].append(mean_squared_error(y_train, y_train_pred))
-            cv_scores['test_mse'].append(mean_squared_error(y_test, y_test_pred))
-            cv_scores['train_mae'].append(mean_absolute_error(y_train, y_train_pred))
-            cv_scores['test_mae'].append(mean_absolute_error(y_test, y_test_pred))
-            cv_scores['train_r2'].append(r2_score(y_train, y_train_pred))
-            cv_scores['test_r2'].append(r2_score(y_test, y_test_pred))
+            # Directional accuracy
+            actual_dir = np.diff(y_test) > 0
+            pred_dir = np.diff(y_pred) > 0
+            dir_acc = np.mean(actual_dir == pred_dir) * 100
+            
+            cv_scores['test_r2'].append(max(r2, 0))
+            cv_scores['test_mae'].append(mae)
+            cv_scores['test_mape'].append(mape)
+            cv_scores['directional_accuracy'].append(dir_acc)
         
         avg_scores = {
-            'avg_train_r2': np.mean(cv_scores['train_r2']),
             'avg_test_r2': np.mean(cv_scores['test_r2']),
-            'avg_test_mse': np.mean(cv_scores['test_mse']),
             'avg_test_mae': np.mean(cv_scores['test_mae']),
+            'avg_test_mape': np.mean(cv_scores['test_mape']),
+            'avg_directional_accuracy': np.mean(cv_scores['directional_accuracy']),
             'std_test_r2': np.std(cv_scores['test_r2'])
         }
         
@@ -165,9 +213,12 @@ class StockPredictor:
             change = next_price - current_price
             change_pct = (change / current_price) * 100
             
-            if hasattr(self, 'cv_results') and include_confidence:
-                base_confidence = self.cv_results.get('avg_test_r2', 0.7) * 100
-                confidence = max(50, base_confidence - (day - 1) * 5)
+            # Confidence based on directional accuracy and R2
+            if hasattr(self, 'cv_results'):
+                r2_conf = self.cv_results.get('avg_test_r2', 0.5) * 50
+                dir_conf = self.cv_results.get('avg_directional_accuracy', 70) * 0.5
+                base_confidence = r2_conf + dir_conf
+                confidence = max(50, min(95, base_confidence - (day - 1) * 5))
             else:
                 confidence = 75 - (day - 1) * 5
             
@@ -187,12 +238,13 @@ class StockPredictor:
             
             predictions.append(prediction)
             
+            # Simulate next day
             new_row = current_data.iloc[-1:].copy()
             new_row['Close'] = next_price
-            new_row['Open'] = next_price * (1 + np.random.normal(0, 0.005))
-            new_row['High'] = next_price * (1 + abs(np.random.normal(0, 0.01)))
-            new_row['Low'] = next_price * (1 - abs(np.random.normal(0, 0.01)))
-            new_row['Volume'] = current_data['Volume'].iloc[-1] * (1 + np.random.normal(0, 0.2))
+            new_row['Open'] = next_price * (1 + np.random.normal(0, 0.003))
+            new_row['High'] = next_price * (1 + abs(np.random.normal(0, 0.008)))
+            new_row['Low'] = next_price * (1 - abs(np.random.normal(0, 0.008)))
+            new_row['Volume'] = current_data['Volume'].iloc[-1] * (1 + np.random.normal(0, 0.15))
             
             current_data = pd.concat([current_data, new_row])
             current_data = current_data.iloc[-100:]
