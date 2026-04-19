@@ -184,9 +184,19 @@ def display_prediction_results(prediction_data, predictor):
         st.metric("Sentiment", sentiment['sentiment_trend'], f"{sentiment['avg_sentiment']:.2f}")
     
     with col4:
-        r2_score = prediction_data['cv_results']['avg_test_r2']
-        st.metric("Model R2 Score", f"{r2_score:.3f}")
-    
+        dir_acc = prediction_data['cv_results']['avg_directional_accuracy']
+        st.metric("Directional Accuracy", f"{dir_acc:.1f}%")
+    # Additional metrics
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("R2 Score", f"{prediction_data['cv_results']['avg_test_r2']:.3f}")
+    with col2:
+        st.metric("MAPE", f"{prediction_data['cv_results']['avg_test_mape']:.2f}%")
+    with col3:
+        st.metric("MAE", f"Rs {prediction_data['cv_results']['avg_test_mae']:.2f}")
+    with col4:
+        st.metric("Algorithm", "XGBoost")
+
     st.subheader("Multi-Day Predictions")
     pred_df = pd.DataFrame(prediction_data['predictions'])
     pred_df_display = pred_df[['date', 'predicted_price', 'change', 'change_pct', 'confidence', 'direction']].copy()
@@ -248,13 +258,12 @@ def show_home_page():
         - Market Indices: NIFTY 50, SENSEX, Bank NIFTY
         - 15+ Stocks: Top Indian companies
         - Multi-day: 1-5 day predictions
-        - XGBoost AI: 85%+ Accuracy
         """)
     
     with col2:
         st.markdown("""
         ### Technology
-        - ML Model: XGBoost Regressor
+        - ML Algorithm: XGBoost Regressor
         - Indicators: 25+ technical indicators
         - Validation: Time Series Cross-Validation
         - Real-time: Yahoo Finance data
@@ -473,23 +482,16 @@ def show_about_page():
     ### How it works:
     1. Data Collection: Real-time data from Yahoo Finance
     2. Feature Engineering: 25+ technical indicators
-    3. Machine Learning: XGBoost Regressor model
+    3. Machine Learning: XGBoost Regressor with time series cross-validation
     4. Prediction: 1-5 day forecasts with confidence scores
-    5. Validation: Time Series Cross-Validation
     
-    ### Accuracy:
-    - Next Day: 85-90% directional accuracy
-    - 3 Days: 80-85% directional accuracy
-    - 5 Days: 75-80% directional accuracy
     
-    ### Model: XGBoost
+    ### Algorithm: XGBoost
     Industry-standard gradient boosting algorithm optimized for time series prediction.
     
     ### Disclaimer:
     For educational purposes only. Not financial advice. Always consult financial advisors.
     
-    
-    Built with Streamlit, XGBoost & scikit-learn
     """)
 
 with st.sidebar:
@@ -504,7 +506,7 @@ with st.sidebar:
     prediction_days = st.slider("Prediction Days", 1, 5, 3)
     
     st.markdown("---")
-    st.info(f"Model: XGBoost\n\n{datetime.now().strftime('%d %B %Y')}\n\n{datetime.now().strftime('%H:%M:%S')}")
+    st.info(f"Algorithm: XGBoost\n\n{datetime.now().strftime('%d %B %Y')}\n\n{datetime.now().strftime('%H:%M:%S')}")
 
 if page == "Home":
     show_home_page()
@@ -522,7 +524,7 @@ else:
 st.markdown("---")
 st.markdown("""
 <div style="text-align: center; color: #666; padding: 1rem;">
-    <p>Stock Market Predictor v2.0 | XGBoost AI Model | For Educational Purposes Only</p>
+    <p>Stock Market Predictor v1.0 | For Educational Purposes Only</p>
     <p>Data by Yahoo Finance | Not Financial Advice</p>
 </div>
 """, unsafe_allow_html=True)
