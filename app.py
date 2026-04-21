@@ -490,7 +490,7 @@ def show_about_page():
     Industry-standard gradient boosting algorithm optimized for time series prediction.
     
     ### Disclaimer:
-    For educational purposes only. Not financial advice. Always consult financial advisors.
+    Not financial advice. Always consult financial advisors.
     
     """)
 
@@ -506,7 +506,7 @@ with st.sidebar:
     prediction_days = st.slider("Prediction Days", 1, 5, 3)
     
     st.markdown("---")
-    st.info(f"Algorithm: XGBoost\n\n{datetime.now().strftime('%d %B %Y')}\n\n{datetime.now().strftime('%H:%M:%S')}")
+    st.info(f"\n\n{datetime.now().strftime('%d %B %Y')}\n\n{datetime.now().strftime('%H:%M:%S')}")
 
 if page == "Home":
     show_home_page()
@@ -524,7 +524,7 @@ else:
 st.markdown("---")
 st.markdown("""
 <div style="text-align: center; color: #666; padding: 1rem;">
-    <p>Stock Market Predictor v1.0 | For Educational Purposes Only</p>
+    <p>Stock Market Predictor v1.0 </p>
     <p>Data by Yahoo Finance | Not Financial Advice</p>
 </div>
 """, unsafe_allow_html=True)
