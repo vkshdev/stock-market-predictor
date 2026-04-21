@@ -12,16 +12,14 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class DataHandler:
-    """Handles stock data fetching and preprocessing"""
     
     def __init__(self):
         self.indian_stocks = {
-            # Market Indices
             'NIFTY_50': '^NSEI',
             'SENSEX': '^BSESN',
             'NIFTY_BANK': '^NSEBANK',
-            
-            # Stocks
+            'NIFTY_IT': '^CNXIT',
+            'NIFTY_PHARMA': '^CNXPHARMA',
             'RELIANCE': 'RELIANCE.NS',
             'TCS': 'TCS.NS',
             'INFY': 'INFY.NS',
@@ -39,22 +37,10 @@ class DataHandler:
             'ADANIPORTS': 'ADANIPORTS.NS'
         }
     
-    def fetch_stock_data(self, symbol, period='2y', interval='1d'):
-        """
-        Fetch stock data from Yahoo Finance
-        
-        Args:
-            symbol (str): Stock symbol
-            period (str): Data period (1y, 2y, 5y, max)
-            interval (str): Data interval (1d, 1h, 1m)
-        
-        Returns:
-            pd.DataFrame: Stock OHLCV data
-            str: Company name
-            str: Sector
-        """
+    def fetch_stock_data(self, symbol, period='5y', interval='1d'):
+        """Fetch stock data - now defaults to 5 years"""
         try:
-            logger.info(f"Fetching data for {symbol}")
+            logger.info(f"Fetching {period} data for {symbol}")
             
             stock = yf.Ticker(symbol)
             data = stock.history(period=period, interval=interval)
@@ -63,7 +49,6 @@ class DataHandler:
                 logger.error(f"No data found for {symbol}")
                 return None, None, None
             
-            # Get company info
             info = stock.info
             company_name = info.get('longName', symbol)
             sector = info.get('sector', 'Unknown')
@@ -77,25 +62,10 @@ class DataHandler:
             return None, None, None
     
     def clean_data(self, df):
-        """
-        Clean and preprocess stock data
-        
-        Args:
-            df (pd.DataFrame): Raw stock data
-        
-        Returns:
-            pd.DataFrame: Cleaned data
-        """
-        # Remove rows with missing values
+        """Clean and preprocess stock data"""
         df = df.dropna()
-        
-        # Forward fill any remaining NaN
         df = df.ffill().bfill()
-        
-        # Remove duplicates
         df = df[~df.index.duplicated(keep='first')]
-        
-        # Sort by date
         df = df.sort_index()
         
         return df
