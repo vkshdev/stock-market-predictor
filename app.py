@@ -1,5 +1,5 @@
 """
-Stock Market Predictor with XGBoost
+Stock Market Predictor with Ensemble (XGB+RF)
 """
 
 import streamlit as st
@@ -194,8 +194,6 @@ def display_prediction_results(prediction_data, predictor):
         st.metric("MAPE", f"{prediction_data['cv_results']['avg_test_mape']:.2f}%")
     with col3:
         st.metric("MAE", f"Rs {prediction_data['cv_results']['avg_test_mae']:.2f}")
-    with col4:
-        st.metric("Algorithm", "XGBoost")
 
     st.subheader("Multi-Day Predictions")
     pred_df = pd.DataFrame(prediction_data['predictions'])
@@ -263,7 +261,7 @@ def show_home_page():
     with col2:
         st.markdown("""
         ### Technology
-        - ML Algorithm: XGBoost Regressor
+        - ML Algorithm: Ensemble (XGB+RF)
         - Indicators: 25+ technical indicators
         - Validation: Time Series Cross-Validation
         - Real-time: Yahoo Finance data
@@ -477,17 +475,17 @@ def show_about_page():
     st.header("About Stock Market Predictor")
     st.markdown("""
     ### What is this?
-    AI-powered platform for predicting Indian stock prices and market indices using XGBoost machine learning.
+    AI-powered platform for predicting Indian stock prices and market indices using Ensemble (XGB+RF) machine learning.
     
     ### How it works:
     1. Data Collection: Real-time data from Yahoo Finance
     2. Feature Engineering: 25+ technical indicators
-    3. Machine Learning: XGBoost Regressor with time series cross-validation
+    3. Machine Learning: Ensemble (XGB+RF) with time series cross-validation
     4. Prediction: 1-5 day forecasts with confidence scores
     
     
-    ### Algorithm: XGBoost
-    Industry-standard gradient boosting algorithm optimized for time series prediction.
+    ### Algorithm: Ensemble (XGB+RF)
+    Combines XGBoost gradient boosting with Random Forest ensemble methods (70% XGBoost, 30% Random Forest) optimized for time series prediction.
     
     ### Disclaimer:
     Not financial advice. Always consult financial advisors.
