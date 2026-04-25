@@ -1,4 +1,10 @@
-# Stock Market Predictor - Live on Streamlit
+<div align="center">
+  <img src="assets/logo.svg" alt="Stock Market Predictor Logo" width="150" height="150" />
+  <h1>Stock Market Predictor</h1>
+  <p><strong>AI-Powered Indian Stock Market Forecasting</strong></p>
+</div>
+
+---
 
 ## Live Deployment
 Access the application here: **https://stock-market-predictor-india.streamlit.app/**

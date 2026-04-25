@@ -1,0 +1,39 @@
+<svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle -->
+  <circle cx="100" cy="100" r="95" fill="#1a1a2e" stroke="#00d4ff" stroke-width="3"/>
+  
+  <!-- Stock chart lines -->
+  <g stroke="#00d4ff" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Uptrend line -->
+    <polyline points="30,120 50,100 70,90 90,85 110,75 130,65 160,45" />
+    
+    <!-- Additional indicator line -->
+    <polyline points="35,140 55,125 75,115 95,108 115,100 135,95 165,85" stroke="#00ff88" stroke-width="2" opacity="0.8" />
+  </g>
+  
+  <!-- Candle elements (representing candlestick chart) -->
+  <g stroke="#00d4ff" stroke-width="1.5" fill="none">
+    <line x1="45" y1="95" x2="45" y2="75" />
+    <rect x="40" y="85" width="10" height="8" fill="#00d4ff" />
+    
+    <line x1="90" y1="70" x2="90" y2="50" />
+    <rect x="85" y="62" width="10" height="10" fill="#00d4ff" />
+    
+    <line x1="135" y1="60" x2="135" y2="40" />
+    <rect x="130" y="52" width="10" height="10" fill="#00d4ff" />
+  </g>
+  
+  <!-- Arrow pointing up (growth indicator) -->
+  <g fill="#00ff88" opacity="0.9">
+    <polygon points="100,155 95,145 105,145" />
+    <rect x="98" y="130" width="4" height="25" fill="#00ff88" />
+  </g>
+  
+  <!-- Dollar sign accent -->
+  <text x="100" y="175" font-size="16" font-weight="bold" text-anchor="middle" fill="#00d4ff" opacity="0.7">$</text>
+  
+  <!-- Decorative nodes -->
+  <circle cx="60" cy="95" r="2.5" fill="#00ff88" opacity="0.6" />
+  <circle cx="100" cy="75" r="2.5" fill="#00ff88" opacity="0.6" />
+  <circle cx="140" cy="65" r="2.5" fill="#00ff88" opacity="0.6" />
+</svg>
