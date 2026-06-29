@@ -2,21 +2,25 @@
 Stock Market Predictor with Ensemble (XGB+RF)
 """
 
+import os
+
 import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from datetime import datetime, timedelta
+from datetime import datetime
+from dotenv import load_dotenv
 
 from data_handler import DataHandler
 from indicators import TechnicalIndicators
 from sentiment import SentimentAnalyzer
 from predictor import StockPredictor
 
+load_dotenv()
+
 st.set_page_config(
     page_title="Stock Market Predictor",
-    page_icon="chart_with_upwards_trend",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -36,7 +40,9 @@ st.markdown("""
 
 if 'data_handler' not in st.session_state:
     st.session_state.data_handler = DataHandler()
-    st.session_state.sentiment_analyzer = SentimentAnalyzer()
+    st.session_state.sentiment_analyzer = SentimentAnalyzer(
+        api_key=os.getenv("NEWS_API_KEY")
+    )
 
 st.markdown("""
 <div style="text-align: center; padding: 1.5rem; background: linear-gradient(90deg, #1f77b4, #2ca02c); color: white; border-radius: 10px; margin-bottom: 2rem;">
@@ -46,6 +52,16 @@ st.markdown("""
     </p>
 </div>
 """, unsafe_allow_html=True)
+
+
+def build_forecast(data, max_horizon):
+    """Train direct horizon models and return only walk-forward evidence."""
+    predictor = StockPredictor()
+    features, _ = predictor.prepare_features(data)
+    targets = predictor.create_targets(data)
+    validation_results = predictor.fit(features, targets)
+    predictions = predictor.predict_multi_day(data, days=max_horizon)
+    return predictor, validation_results, predictions
 
 def create_prediction_chart(prediction_data):
     data = prediction_data['data']
@@ -70,6 +86,38 @@ def create_prediction_chart(prediction_data):
     pred_prices = [p['predicted_price'] for p in predictions]
     connection_dates = [recent_data.index[-1]] + pred_dates
     connection_prices = [recent_data['Close'].iloc[-1]] + pred_prices
+    interval_lower = [recent_data['Close'].iloc[-1]] + [
+        p['lower_price'] for p in predictions
+    ]
+    interval_upper = [recent_data['Close'].iloc[-1]] + [
+        p['upper_price'] for p in predictions
+    ]
+
+    fig.add_trace(
+        go.Scatter(
+            x=connection_dates,
+            y=interval_lower,
+            mode='lines',
+            line=dict(width=0),
+            showlegend=False,
+            hoverinfo='skip',
+        ),
+        row=1, col=1
+    )
+
+    fig.add_trace(
+        go.Scatter(
+            x=connection_dates,
+            y=interval_upper,
+            mode='lines',
+            line=dict(width=0),
+            fill='tonexty',
+            fillcolor='rgba(214, 39, 40, 0.15)',
+            name='Prediction interval',
+            hoverinfo='skip',
+        ),
+        row=1, col=1
+    )
     
     fig.add_trace(
         go.Scatter(x=connection_dates, y=connection_prices,
@@ -121,9 +169,15 @@ def show_technical_analysis(prediction_data, predictor):
 
 def show_sentiment_analysis(prediction_data):
     sentiment = prediction_data['sentiment']
+    if not sentiment['available']:
+        st.info(f"News sentiment unavailable: {sentiment['reason']}")
+        return
+
     st.markdown(f"**Overall Sentiment:** {sentiment['sentiment_trend']}")
     st.markdown(f"**Sentiment Score:** {sentiment['avg_sentiment']:.2f}")
-    st.markdown(f"**Confidence:** {sentiment['confidence']*100:.1f}%")
+    st.markdown(
+        f"**Average Subjectivity:** {sentiment['average_subjectivity']*100:.1f}%"
+    )
     st.markdown(f"**Articles Analyzed:** {sentiment['article_count']}")
     
     if sentiment['avg_sentiment'] > 0.2:
@@ -135,36 +189,28 @@ def show_sentiment_analysis(prediction_data):
 
 def show_recommendations(prediction_data):
     day1_pred = prediction_data['predictions'][0]
-    change_pct = day1_pred['change_pct']
-    confidence = day1_pred['confidence']
-    
-    if change_pct > 2 and confidence > 70:
-        recommendation = "STRONG BUY"
-        reasoning = "High confidence bullish prediction"
-    elif change_pct > 1 and confidence > 60:
-        recommendation = "BUY"
-        reasoning = "Moderate bullish prediction"
-    elif change_pct < -2 and confidence > 70:
-        recommendation = "STRONG SELL"
-        reasoning = "High confidence bearish prediction"
-    elif change_pct < -1 and confidence > 60:
-        recommendation = "SELL"
-        reasoning = "Moderate bearish prediction"
+    st.markdown(f"### {day1_pred['signal']} model signal")
+    st.markdown(
+        f"**Expected 1-day return:** {day1_pred['change_pct']:+.2f}%"
+    )
+    st.markdown(f"**Probability up:** {day1_pred['probability_up']:.1f}%")
+    st.markdown(
+        "**Prediction interval:** "
+        f"{day1_pred['lower_return']*100:+.2f}% to "
+        f"{day1_pred['upper_return']*100:+.2f}%"
+    )
+    st.markdown(f"**Confidence:** {day1_pred['confidence_label']}")
+
+    if not day1_pred['beats_zero_baseline']:
+        st.warning(
+            "The model did not beat the zero-return baseline in walk-forward "
+            "validation. Treat this as no demonstrated edge."
+        )
     else:
-        recommendation = "HOLD"
-        reasoning = "Neutral or low confidence"
-    
-    st.markdown(f"### {recommendation}")
-    st.markdown(f"**Reasoning:** {reasoning}")
-    st.markdown(f"**Confidence:** {confidence}%")
-    
-    current_price = prediction_data['current_price']
-    predicted_price = day1_pred['predicted_price']
-    
-    st.markdown("**Suggested Levels:**")
-    st.write(f"Entry: Rs {current_price * 0.998:.2f}")
-    st.write(f"Target: Rs {predicted_price * 1.01:.2f}")
-    st.write(f"Stop Loss: Rs {current_price * 0.97:.2f}")
+        st.caption(
+            "Signal strength is based on calibrated direction probability and "
+            "out-of-fold uncertainty, not investment advice."
+        )
 
 def display_prediction_results(prediction_data, predictor):
     st.success("Analysis Complete")
@@ -180,30 +226,47 @@ def display_prediction_results(prediction_data, predictor):
                  f"{day1_pred['change']:+,.2f} ({day1_pred['change_pct']:+.2f}%)")
     
     with col3:
-        sentiment = prediction_data['sentiment']
-        st.metric("Sentiment", sentiment['sentiment_trend'], f"{sentiment['avg_sentiment']:.2f}")
+        st.metric(
+            "Model Signal",
+            day1_pred['signal'],
+            f"{day1_pred['probability_up']:.1f}% probability up",
+        )
     
     with col4:
-        dir_acc = prediction_data['cv_results']['avg_directional_accuracy']
+        dir_acc = prediction_data['validation_results']['1d']['directional_accuracy']
         st.metric("Directional Accuracy", f"{dir_acc:.1f}%")
-    # Additional metrics
+
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.metric("R2 Score", f"{prediction_data['cv_results']['avg_test_r2']:.3f}")
+        return_mae = prediction_data['validation_results']['1d']['mae'] * 100
+        st.metric("Return MAE", f"{return_mae:.3f}%")
     with col2:
-        st.metric("MAPE", f"{prediction_data['cv_results']['avg_test_mape']:.2f}%")
+        balanced_accuracy = prediction_data['validation_results']['1d']['balanced_accuracy']
+        st.metric("Balanced Accuracy", f"{balanced_accuracy:.1f}%")
     with col3:
-        st.metric("MAE", f"Rs {prediction_data['cv_results']['avg_test_mae']:.2f}")
+        brier = prediction_data['validation_results']['1d']['brier_score']
+        st.metric("Brier Score", f"{brier:.3f}")
+    with col4:
+        baseline_lift = prediction_data['validation_results']['1d'][
+            'mae_improvement_vs_zero_pct'
+        ]
+        st.metric("MAE vs Zero Baseline", f"{baseline_lift:+.1f}%")
 
     st.subheader("Multi-Day Predictions")
     pred_df = pd.DataFrame(prediction_data['predictions'])
-    pred_df_display = pred_df[['date', 'predicted_price', 'change', 'change_pct', 'confidence', 'direction']].copy()
-    pred_df_display.columns = ['Date', 'Predicted Price', 'Change', 'Change %', 'Confidence %', 'Direction']
+    pred_df_display = pred_df[[
+        'horizon', 'date', 'predicted_price', 'change_pct', 'probability_up',
+        'lower_price', 'upper_price', 'confidence_label', 'signal'
+    ]].copy()
+    pred_df_display.columns = [
+        'Horizon', 'Date', 'Predicted Price', 'Expected Return %',
+        'Probability Up %', 'Interval Low', 'Interval High', 'Confidence', 'Signal'
+    ]
     st.dataframe(pred_df_display, use_container_width=True)
     
     create_prediction_chart(prediction_data)
     
-    tab1, tab2, tab3 = st.tabs(["Technical Analysis", "Sentiment", "Recommendations"])
+    tab1, tab2, tab3 = st.tabs(["Technical Analysis", "Sentiment", "Signal Analysis"])
     with tab1:
         show_technical_analysis(prediction_data, predictor)
     with tab2:
@@ -221,10 +284,13 @@ def display_portfolio_results(results):
             'Stock': stock,
             'Current Price': f"Rs {data['current_price']:,.2f}",
             'Predicted': f"Rs {day1['predicted_price']:,.2f}",
-            'Change %': f"{day1['change_pct']:+.2f}%",
-            'Direction': day1['direction'],
-            'Confidence': f"{day1['confidence']:.1f}%",
-            'Model R2': f"{data['cv_r2']:.3f}"
+            'Expected Return': f"{day1['change_pct']:+.2f}%",
+            'Signal': day1['signal'],
+            'Probability Up': f"{day1['probability_up']:.1f}%",
+            'Directional Accuracy': (
+                f"{data['validation_results']['1d']['directional_accuracy']:.1f}%"
+            ),
+            'Beats Baseline': data['validation_results']['1d']['beats_zero_baseline'],
         })
     
     summary_df = pd.DataFrame(summary_data)
@@ -255,7 +321,7 @@ def show_home_page():
         ### Features
         - Market Indices: NIFTY 50, SENSEX, Bank NIFTY
         - 15+ Stocks: Top Indian companies
-        - Multi-day: 1-5 day predictions
+        - Direct horizons: 1, 3, and 5 trading days
         """)
     
     with col2:
@@ -270,10 +336,10 @@ def show_home_page():
     with col3:
         st.markdown("""
         ### Analytics
-        - Sentiment Analysis: News integration
+        - Sentiment Analysis: Real news only when configured
         - Risk Assessment: Confidence scores
         - Visualization: Interactive charts
-        - Recommendations: Buy/Sell/Hold
+        - Signals: Bullish/Bearish/Neutral with uncertainty
         """)
     
     st.markdown("---")
@@ -300,9 +366,9 @@ def show_home_page():
     st.subheader("Getting Started")
     st.markdown("""
     1. Select Analysis Type from sidebar
-    2. Choose Prediction Days (1-5 days)
+    2. Choose a direct forecast horizon (1, 3, or 5 trading days)
     3. Click Predict to generate forecasts
-    4. Review Results with confidence scores and charts
+    4. Review calibrated probabilities, intervals, baselines, and charts
     """)
 
 def show_nifty_predictor(days):
@@ -321,20 +387,13 @@ def show_nifty_predictor(days):
             data = data_handler.clean_data(data)
             sentiment_data = sentiment_analyzer.get_sentiment("NIFTY 50 India")
             
-            predictor = StockPredictor()
-            X, feature_cols = predictor.prepare_features(data)
-            y = predictor.create_target(data, days_ahead=1)
-            
-            metrics = predictor.train(X, y)
-            cv_results = predictor.cross_validate(X, y, n_splits=5)
-            predictor.cv_results = cv_results
-            predictions = predictor.predict_multi_day(data, days=days)
+            predictor, validation_results, predictions = build_forecast(data, days)
             
             st.session_state.nifty_prediction = {
                 'symbol': '^NSEI', 'name': 'NIFTY 50',
                 'current_price': data['Close'].iloc[-1],
                 'predictions': predictions, 'sentiment': sentiment_data,
-                'metrics': metrics, 'cv_results': cv_results, 'data': data
+                'validation_results': validation_results, 'data': data
             }
         
         display_prediction_results(st.session_state.nifty_prediction, predictor)
@@ -355,20 +414,13 @@ def show_sensex_predictor(days):
             data = data_handler.clean_data(data)
             sentiment_data = sentiment_analyzer.get_sentiment("SENSEX BSE India")
             
-            predictor = StockPredictor()
-            X, feature_cols = predictor.prepare_features(data)
-            y = predictor.create_target(data, days_ahead=1)
-            
-            metrics = predictor.train(X, y)
-            cv_results = predictor.cross_validate(X, y, n_splits=5)
-            predictor.cv_results = cv_results
-            predictions = predictor.predict_multi_day(data, days=days)
+            predictor, validation_results, predictions = build_forecast(data, days)
             
             st.session_state.sensex_prediction = {
                 'symbol': '^BSESN', 'name': 'SENSEX',
                 'current_price': data['Close'].iloc[-1],
                 'predictions': predictions, 'sentiment': sentiment_data,
-                'metrics': metrics, 'cv_results': cv_results, 'data': data
+                'validation_results': validation_results, 'data': data
             }
         
         display_prediction_results(st.session_state.sensex_prediction, predictor)
@@ -398,20 +450,13 @@ def show_stock_predictor(days):
             data = data_handler.clean_data(data)
             sentiment_data = sentiment_analyzer.get_sentiment(company_name or selected_stock)
             
-            predictor = StockPredictor()
-            X, feature_cols = predictor.prepare_features(data)
-            y = predictor.create_target(data, days_ahead=1)
-            
-            metrics = predictor.train(X, y)
-            cv_results = predictor.cross_validate(X, y, n_splits=5)
-            predictor.cv_results = cv_results
-            predictions = predictor.predict_multi_day(data, days=days)
+            predictor, validation_results, predictions = build_forecast(data, days)
             
             prediction_data = {
                 'symbol': symbol, 'name': company_name or selected_stock, 'sector': sector,
                 'current_price': data['Close'].iloc[-1],
                 'predictions': predictions, 'sentiment': sentiment_data,
-                'metrics': metrics, 'cv_results': cv_results, 'data': data
+                'validation_results': validation_results, 'data': data
             }
             st.session_state[f'stock_{selected_stock}'] = prediction_data
         
@@ -442,25 +487,21 @@ def show_portfolio_analysis(days):
             
             symbol = data_handler.indian_stocks[stock]
             try:
-                data, company_name, sector = data_handler.fetch_stock_data(symbol, period='1y')
+                data, company_name, sector = data_handler.fetch_stock_data(symbol, period='2y')
                 if data is not None:
                     data = TechnicalIndicators.add_all_indicators(data)
                     data = data_handler.clean_data(data)
                     
-                    predictor = StockPredictor()
-                    X, _ = predictor.prepare_features(data)
-                    y = predictor.create_target(data, days_ahead=1)
-                    
-                    predictor.train(X, y)
-                    cv_results = predictor.cross_validate(X, y, n_splits=3)
-                    predictor.cv_results = cv_results
-                    predictions = predictor.predict_multi_day(data, days=days)
+                    predictor, validation_results, predictions = build_forecast(
+                        data,
+                        days,
+                    )
                     
                     results[stock] = {
                         'name': company_name or stock,
                         'current_price': data['Close'].iloc[-1],
                         'predictions': predictions,
-                        'cv_r2': cv_results['avg_test_r2']
+                        'validation_results': validation_results,
                     }
             except Exception as e:
                 st.warning(f"Could not analyze {stock}: {str(e)}")
@@ -481,7 +522,7 @@ def show_about_page():
     1. Data Collection: Real-time data from Yahoo Finance
     2. Feature Engineering: 25+ technical indicators
     3. Machine Learning: Ensemble (XGB+RF) with time series cross-validation
-    4. Prediction: 1-5 day forecasts with confidence scores
+    4. Prediction: direct 1, 3, and 5-day return forecasts with uncertainty
     
     
     ### Algorithm: Ensemble (XGB+RF)
@@ -501,7 +542,12 @@ with st.sidebar:
     
     st.markdown("---")
     st.markdown("### Settings")
-    prediction_days = st.slider("Prediction Days", 1, 5, 3)
+    prediction_days = st.select_slider(
+        "Forecast Horizon",
+        options=[1, 3, 5],
+        value=3,
+        format_func=lambda value: f"{value} trading day{'s' if value > 1 else ''}",
+    )
     
     st.markdown("---")
     st.info(f"\n\n{datetime.now().strftime('%d %B %Y')}\n\n{datetime.now().strftime('%H:%M:%S')}")
