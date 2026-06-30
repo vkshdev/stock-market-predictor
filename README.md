@@ -126,9 +126,9 @@ When 'NEWS_API_KEY' is configured, recent headlines are fetched and scored. When
 
 Text subjectivity is displayed as subjectivity, not mislabeled as confidence. Sentiment remains a separate informational output and is not included in model training.
 
-## Target Architecture
+## Architecture
 
-The production destination separates ML, API, and presentation concerns:
+Production destination separates ML, API, and presentation concerns:
 
 ```
 Next.js frontend
@@ -142,31 +142,6 @@ Python forecasting package
       > model training and validation
       > model registry and prediction artifacts
 ```
-
-### FastAPI
-
-FastAPI will own:
-
-- versioned prediction and portfolio endpoints
-- Pydantic request and response contracts
-- authentication and plan-entitlement enforcement
-- cached artifact retrieval
-- model and data freshness metadata
-- admin-only background job triggers
-- health, readiness, and OpenAPI documentation
-
-### Next.js
-
-Next.js will own:
-
-- customer dashboard
-- stock, index, portfolio, and model-transparency pages
-- account, pricing, and subscription experiences
-- typed API integration
-- loading, empty, stale-data, and failure states
-- product analytics and frontend observability
-
-Prediction formulas and confidence rules remain server-side. The frontend presents the API contract and does not duplicate ML logic.
 
 
 ## Data Sources And Research
